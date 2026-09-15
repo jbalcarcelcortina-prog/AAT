@@ -1,0 +1,160 @@
+// Manito — Prisma schema
+//
+// Datasource is SQLite for local development. Everything in this schema is
+// written to be portable to Postgres: no SQLite-only features are used, and
+// "enum-like" columns are plain strings validated in `src/lib/constants.ts`
+// (Prisma enums are not supported on SQLite). To move to Postgres, change
+// `provider` below to "postgresql" and point DATABASE_URL at your database.
+// See the "Next steps" section of the README.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Accounts
+// ---------------------------------------------------------------------------
+
+/// A single account table for both sides of the marketplace. `role` decides
+/// which dashboard the user lands on. Providers additionally own exactly one
+/// ProviderProfile row.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  /// bcrypt hash — never store or return the plaintext password.
+  passwordHash String
+  /// "CONSUMER" | "PROVIDER" — see Role in src/lib/constants.ts
+  role         String
+  phone        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  providerProfile ProviderProfile?
+  jobs            Job[]            @relation("ConsumerJobs")
+
+  @@index([role])
+}
+
+// ---------------------------------------------------------------------------
+// Providers
+// ---------------------------------------------------------------------------
+
+/// The public-facing trade profile shown on a match card.
+model ProviderProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  bio             String   @default("")
+  yearsExperience Int      @default(0)
+  /// MOCK: seeded, never computed. A real version derives this from verified
+  /// reviews left by consumers after a completed job.
+  rating          Float    @default(0)
+  /// MOCK: seeded alongside `rating` so cards can show "4.8 (37)".
+  reviewCount     Int      @default(0)
+  /// Indicative hourly rate in MXN. Display-only, no billing attached.
+  hourlyRateMxn   Int?
+  /// MOCK: there is no identity or license verification behind this flag.
+  verified        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categories    ProviderCategory[]
+  areas         ProviderArea[]
+  requests      JobRequest[]
+  acceptedJobs  Job[]              @relation("AcceptedProvider")
+
+  @@index([rating])
+}
+
+/// One row per trade a provider works in. A join table (rather than a
+/// comma-separated column) keeps the category filter a real indexed query and
+/// ports to Postgres unchanged.
+model ProviderCategory {
+  id         String @id @default(cuid())
+  providerId String
+  /// See SERVICE_CATEGORIES in src/lib/constants.ts
+  category   String
+
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, category])
+  @@index([category])
+}
+
+/// One row per neighborhood a provider covers. Same reasoning as
+/// ProviderCategory. A real version would store a polygon or a centroid plus
+/// a travel radius instead of a neighborhood slug.
+model ProviderArea {
+  id         String @id @default(cuid())
+  providerId String
+  /// See SERVICE_AREAS in src/lib/constants.ts
+  area       String
+
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, area])
+  @@index([area])
+}
+
+// ---------------------------------------------------------------------------
+// Jobs
+// ---------------------------------------------------------------------------
+
+/// A problem posted by a consumer. Its lifecycle is
+/// OPEN -> REQUESTED -> ACCEPTED -> COMPLETED (see JOB_STATUSES).
+model Job {
+  id          String   @id @default(cuid())
+  consumerId  String
+  /// See SERVICE_CATEGORIES in src/lib/constants.ts
+  category    String
+  title       String
+  description String
+  /// See SERVICE_AREAS in src/lib/constants.ts
+  area        String
+  /// "LOW" | "MEDIUM" | "HIGH"
+  urgency     String
+  /// "OPEN" | "REQUESTED" | "ACCEPTED" | "COMPLETED"
+  status      String   @default("OPEN")
+  /// Set once a provider accepts. Denormalised on purpose: it is the single
+  /// question every dashboard asks about a job.
+  acceptedProviderId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  consumer         User             @relation("ConsumerJobs", fields: [consumerId], references: [id], onDelete: Cascade)
+  acceptedProvider ProviderProfile? @relation("AcceptedProvider", fields: [acceptedProviderId], references: [id], onDelete: SetNull)
+  requests         JobRequest[]
+
+  @@index([status])
+  @@index([category, area])
+  @@index([consumerId])
+}
+
+/// A consumer reaching out to one specific provider about one job. A job can
+/// have several pending requests; the first provider to accept wins and the
+/// rest are auto-declined (see src/lib/jobs.ts).
+model JobRequest {
+  id          String    @id @default(cuid())
+  jobId       String
+  providerId  String
+  /// "PENDING" | "ACCEPTED" | "DECLINED"
+  status      String    @default("PENDING")
+  /// Snapshot of the match score at request time, so a future version can
+  /// measure how well the matcher actually predicted acceptances.
+  matchScore  Float?
+  message     String?
+  createdAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  job      Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, providerId])
+  @@index([providerId, status])
+}
