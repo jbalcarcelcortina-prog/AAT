@@ -178,10 +178,28 @@ transaction, so two pros never both think they have the work (`src/lib/jobs.ts`)
 The app deploys as-is — but **read the SQLite note first.**
 
 1. Push the repo to GitHub and import it at vercel.com.
-2. Add both environment variables (`DATABASE_URL`, `AUTH_SECRET`) in
+2. **Set Root Directory to `manito`.** This app lives in a subfolder of the
+   repo, so Vercel will not find it otherwise — it falls back to publishing the
+   repository as raw static files, and every URL returns a plain-text
+   `NOT_FOUND` because there is no `index.html` at the root. Set it in the
+   import wizard (Root Directory → Edit → pick `manito`); the Framework Preset
+   should flip to "Next.js" as soon as you do. Changing it later, on an
+   existing project, is less reliable — re-importing is often faster.
+3. Add both environment variables (`DATABASE_URL`, `AUTH_SECRET`) in
    Project → Settings → Environment Variables.
-3. Deploy. `npm run build` already runs `prisma generate`, and `postinstall`
+4. Deploy. `npm run build` already runs `prisma generate`, and `postinstall`
    does too, so no extra build configuration is needed.
+
+### Getting the first production deployment
+
+Connecting the Git repository does **not** by itself produce a production
+deployment. Vercel builds production only when a commit lands on the default
+branch *after* the project exists, so a freshly connected project sits at
+"No Production Deployment" and its domain returns `DEPLOYMENT_NOT_FOUND`.
+
+Push any commit to `main` to trigger the first one — an empty commit
+(`git commit --allow-empty`) is enough. Alternatively, open Deployments, find a
+preview build, and use "Promote to Production".
 
 ### ⚠️ SQLite does not persist on Vercel
 
