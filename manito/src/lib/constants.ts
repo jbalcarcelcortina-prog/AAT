@@ -22,30 +22,36 @@ export const SERVICE_CATEGORIES = [
   {
     value: "PLUMBING",
     label: "Plumbing",
+    /** Oficio shown when a description suggests this trade. CDMX Spanish. */
+    oficio: "Plomero",
     blurb: "Leaks, clogs, water heaters, pipe repair",
     icon: "droplets",
   },
   {
     value: "ELECTRICAL",
     label: "Electrical",
+    oficio: "Electricista",
     blurb: "Wiring, outlets, panels, lighting",
     icon: "zap",
   },
   {
     value: "HVAC",
     label: "HVAC",
+    oficio: "Técnico en aire acondicionado",
     blurb: "Heating, cooling, ventilation, minisplits",
     icon: "wind",
   },
   {
     value: "HANDYMAN",
     label: "Handyman",
+    oficio: "Manitas",
     blurb: "Mounting, carpentry, drywall, odd jobs",
     icon: "hammer",
   },
   {
     value: "APPLIANCE_REPAIR",
     label: "Appliance repair",
+    oficio: "Técnico en electrodomésticos",
     blurb: "Washers, dryers, fridges, ovens",
     icon: "washing-machine",
   },
@@ -59,6 +65,11 @@ export const SERVICE_CATEGORY_VALUES = SERVICE_CATEGORIES.map(
 
 export function categoryLabel(value: string): string {
   return SERVICE_CATEGORIES.find((c) => c.value === value)?.label ?? value;
+}
+
+/** Spanish oficio name for a trade. Used by the description classifier. */
+export function categoryOficio(value: string): string {
+  return SERVICE_CATEGORIES.find((c) => c.value === value)?.oficio ?? value;
 }
 
 export function categoryIconName(value: string): string {
