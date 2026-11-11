@@ -57,6 +57,7 @@ Both are required, locally and on Vercel.
 | `npm run db:reset`  | `db:push --force-reset` + seed                     |
 | `npm run db:studio` | Prisma Studio, to poke at rows directly            |
 | `npm run lint`      | ESLint                                             |
+| `npm test`          | Unit tests for the oficio classifier               |
 
 ---
 
@@ -86,7 +87,8 @@ src/
     shared/              cards, badges, empty states used by both roles
     consumer/ provider/  role-specific client components
   lib/
-    matching.ts    ★ THE MATCHER — the piece meant to be replaced
+    matching.ts      ★ THE MATCHER — the piece meant to be replaced
+    suggest-trade.ts ★ keyword oficio classifier for a problem description
     constants.ts     trades, neighborhoods, urgency, statuses + labels
     strings.ts       every user-facing string, in one object
     jobs.ts          job lifecycle rules + ownership checks
@@ -113,6 +115,7 @@ src/
 | GET    | `/api/provider/profile`      | pro       | Your own profile                   |
 | PUT    | `/api/provider/profile`      | pro       | Create or replace it               |
 | GET    | `/api/providers`             | anyone    | Run the matcher without a job — handy for tuning |
+| POST   | `/api/suggest-trade`         | anyone    | Suggest an oficio from a problem description |
 
 Every route re-checks the session and ownership. "The button was hidden" is not
 a permission check, and these endpoints are reachable directly.
@@ -158,6 +161,20 @@ It also returns a `reasons: string[]` per match, which is what the chips on each
 card show ("Serves Roma", "Top rated", "14 years experience"). Anything a future
 ranker considers should show up there too — a ranking a user can't understand is
 a ranking they won't trust.
+
+### Suggesting a trade from the description
+
+`suggestTrade(description)` in **`src/lib/suggest-trade.ts`** reads the problem
+text and returns one of the five existing trades, or no suggestion.
+
+It folds accents and case, then scores whole-word keywords in Spanish
+(Mexico). A high-confidence result needs one trade clearly ahead. A weak or
+tied score comes back as `confidence: "low"`. No keyword comes back as
+`confidence: "none"` with a null oficio. `POST /api/suggest-trade` with
+`{ "description": "..." }` returns that object under `data`. The post-a-problem
+form prefills the trade select on a high-confidence guess and leaves the
+choice editable; a low-confidence guess is shown and applied only if the
+customer asks.
 
 ### Job lifecycle
 

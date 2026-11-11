@@ -120,6 +120,16 @@ export const t = {
     fieldDescription: "What's going on?",
     fieldDescriptionPlaceholder:
       "Water backs up when the dishwasher runs. Started two days ago, plunger didn't help.",
+    suggestTradeLoading: "Revisando la descripción…",
+    suggestTradeHigh: (oficio: string) =>
+      `Sugerimos ${oficio} por lo que escribiste.`,
+    suggestTradeLow: (oficio: string) =>
+      `Tal vez sea ${oficio}, pero no es seguro.`,
+    suggestTradeKeywords: "Coincide con",
+    suggestTradeHint: "Puedes cambiar el oficio si no es el correcto.",
+    suggestTradeApply: (oficio: string) => `Usar ${oficio}`,
+    suggestTradeError:
+      "No pudimos sugerir un oficio. Elige uno de la lista.",
     fieldArea: "Your neighborhood",
     fieldUrgency: "How urgent is it?",
     submitJob: "Find pros",

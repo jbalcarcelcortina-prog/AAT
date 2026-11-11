@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
@@ -30,6 +30,17 @@ interface CreatedJob {
   id: string;
 }
 
+interface TradeSuggestion {
+  category: string | null;
+  oficio: string | null;
+  keywords: string[];
+  confidence: "high" | "low" | "none";
+}
+
+/** Wait until the description is long enough to be a sentence, then pause. */
+const SUGGEST_AFTER_CHARS = 10;
+const SUGGEST_DELAY_MS = 400;
+
 export function PostJobForm() {
   const router = useRouter();
   const [category, setCategory] = useState("");
@@ -40,6 +51,94 @@ export function PostJobForm() {
   const [fields, setFields] = useState<Record<string, string>>({});
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
+  const [suggestion, setSuggestion] = useState<TradeSuggestion | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestError, setSuggestError] = useState(false);
+  // The select is the user's once they touch it. Until then a high-confidence
+  // guess may fill it, and a later "none" clears only that guess.
+  const categoryTouched = useRef(false);
+  const categoryRef = useRef("");
+  const autoSet = useRef<string | null>(null);
+  const requestSeq = useRef(0);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function updateCategory(value: string) {
+    categoryRef.current = value;
+    setCategory(value);
+  }
+
+  function clearAutofill() {
+    if (
+      !categoryTouched.current &&
+      autoSet.current &&
+      categoryRef.current === autoSet.current
+    ) {
+      updateCategory("");
+    }
+    autoSet.current = null;
+  }
+
+  function onCategoryChange(value: string) {
+    categoryTouched.current = true;
+    autoSet.current = null;
+    updateCategory(value);
+  }
+
+  function applySuggestion() {
+    if (!suggestion?.category) return;
+    categoryTouched.current = true;
+    autoSet.current = null;
+    updateCategory(suggestion.category);
+  }
+
+  function onDescriptionChange(value: string) {
+    setDescription(value);
+    setSuggesting(false);
+    setSuggestError(false);
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+
+    const text = value.trim();
+    if (text.length < SUGGEST_AFTER_CHARS) {
+      requestSeq.current += 1;
+      setSuggestion(null);
+      clearAutofill();
+      return;
+    }
+
+    const seq = ++requestSeq.current;
+    suggestTimer.current = setTimeout(async () => {
+      setSuggesting(true);
+      const result = await postJson<TradeSuggestion>("/api/suggest-trade", {
+        description: text,
+      });
+      if (seq !== requestSeq.current) return;
+
+      setSuggesting(false);
+      if (!result.ok || !result.data) {
+        setSuggestion(null);
+        setSuggestError(true);
+        return;
+      }
+
+      setSuggestion(result.data);
+      if (categoryTouched.current) return;
+
+      if (result.data.confidence === "high" && result.data.category) {
+        autoSet.current = result.data.category;
+        updateCategory(result.data.category);
+        return;
+      }
+
+      clearAutofill();
+    }, SUGGEST_DELAY_MS);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (suggestTimer.current) clearTimeout(suggestTimer.current);
+      requestSeq.current += 1;
+    };
+  }, []);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -72,7 +171,7 @@ export function PostJobForm() {
 
       <div className="space-y-1.5">
         <Label htmlFor="category">{t.consumer.fieldCategory}</Label>
-        <Select value={category} onValueChange={setCategory}>
+        <Select value={category} onValueChange={onCategoryChange}>
           <SelectTrigger id="category" className="w-full" aria-invalid={Boolean(fields.category)}>
             <SelectValue placeholder="Choose a trade" />
           </SelectTrigger>
@@ -107,12 +206,19 @@ export function PostJobForm() {
           id="description"
           rows={5}
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) => onDescriptionChange(e.target.value)}
           placeholder={t.consumer.fieldDescriptionPlaceholder}
           aria-invalid={Boolean(fields.description)}
           required
         />
         <FieldError message={fields.description} />
+        <TradeSuggestionNote
+          suggestion={suggestion}
+          suggesting={suggesting}
+          suggestError={suggestError}
+          category={category}
+          onApply={applySuggestion}
+        />
       </div>
 
       <div className="space-y-1.5">
@@ -166,5 +272,72 @@ export function PostJobForm() {
         {pending ? t.consumer.submittingJob : t.consumer.submitJob}
       </Button>
     </form>
+  );
+}
+
+function TradeSuggestionNote({
+  suggestion,
+  suggesting,
+  suggestError,
+  category,
+  onApply,
+}: {
+  suggestion: TradeSuggestion | null;
+  suggesting: boolean;
+  suggestError: boolean;
+  category: string;
+  onApply: () => void;
+}) {
+  if (suggesting && !suggestion) {
+    return (
+      <p className="text-xs text-muted-foreground" role="status">
+        {t.consumer.suggestTradeLoading}
+      </p>
+    );
+  }
+
+  if (suggestError) {
+    return (
+      <p className="text-xs text-muted-foreground" role="status">
+        {t.consumer.suggestTradeError}
+      </p>
+    );
+  }
+
+  if (!suggestion || suggestion.confidence === "none" || !suggestion.oficio) {
+    return null;
+  }
+
+  const message =
+    suggestion.confidence === "high"
+      ? t.consumer.suggestTradeHigh(suggestion.oficio)
+      : t.consumer.suggestTradeLow(suggestion.oficio);
+
+  return (
+    <div
+      className="mt-2 rounded-xl border border-brand/40 bg-brand-soft px-3.5 py-3"
+      role="status"
+    >
+      <p className="text-sm font-medium">{message}</p>
+      {suggestion.keywords.length > 0 && (
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t.consumer.suggestTradeKeywords}: {suggestion.keywords.join(", ")}.
+        </p>
+      )}
+      <p className="mt-1 text-xs text-muted-foreground">
+        {t.consumer.suggestTradeHint}
+      </p>
+      {suggestion.category && suggestion.category !== category && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-2.5 bg-card"
+          onClick={onApply}
+        >
+          {t.consumer.suggestTradeApply(suggestion.oficio)}
+        </Button>
+      )}
+    </div>
   );
 }
