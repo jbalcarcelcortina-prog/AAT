@@ -56,6 +56,18 @@ export const createJobSchema = z.object({
 });
 export type CreateJobInput = z.infer<typeof createJobSchema>;
 
+/**
+ * Body for POST /api/suggest-trade. Empty text is valid and means
+ * "no suggestion"; the classifier decides that, not the schema.
+ */
+export const suggestTradeSchema = z.object({
+  description: z
+    .string("Description must be text")
+    .trim()
+    .max(2000, "Description is too long"),
+});
+export type SuggestTradeInput = z.infer<typeof suggestTradeSchema>;
+
 export const providerProfileSchema = z.object({
   categories: z
     .array(enumOf(SERVICE_CATEGORY_VALUES, "Unknown trade"))
