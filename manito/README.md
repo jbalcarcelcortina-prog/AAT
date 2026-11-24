@@ -326,3 +326,19 @@ contains a hardcoded sentence.
   the app degrades to an empty dashboard rather than erroring, and logging out
   clears it. Re-seed *before* you start demoing, or check the session against
   the database in `getCurrentUser` if you'd rather pay a query per request.
+
+## Decisiones de diseño vs. sugerencias del IS
+
+### 1. Base de datos en Vercel (deployment)
+- **Qué propuso el IS:** al revisar el código me dijo que SQLite en Vercel no guarda nada, porque el sistema de archivos de Vercel es efímero y de solo lectura, y me propuso pasar a Postgres (Neon, Supabase o Vercel Postgres).
+- **Qué decidí:** revisé la propuesta y no migré. Para esta entrega Manito sigue con SQLite (Prisma).
+- **Por qué:** es un proyecto de clase con 0 usuarios reales y a días de la entrega no quise arriesgarme a romper lo que ya funcionaba. Sé que así los registros y los trabajos publicados se pueden perder en el deploy; lo dejé documentado como lo primero que cambiaría antes de tener usuarios reales.
+
+### 2. Límite del plan gratis de Vercel (escalabilidad)
+- **Qué propuso el IS:** me calculó cuántos usuarios aguanta Manito en el plan Hobby de Vercel y me dio el límite de 1,000,000 de invocaciones de funciones al mes.
+- **Qué decidí:** no me quedé con su número. Abrí la página del plan Hobby de Vercel y revisé el límite yo mismo; coincidía, así que lo acepté.
+- **Por qué:** es un dato que la IA puede tener viejo o mal, y de ese límite depende si la app sigue funcionando gratis.
+
+### Otra decisión mía: sugerencia de oficio sin modelo de IA
+- La IA no me propuso usar un modelo aquí; fue decisión mía. `/api/suggest-trade` funciona con palabras clave ("fuga", "apagador", etc.) y sugiere plomero o electricista.
+- Así no hay costo por tokens y lo que escribe el cliente no se manda a ningún modelo.
